@@ -1,0 +1,6 @@
+#忽略以下名称或后缀文件
+**/node_modules
+**/dist
+.DS_Store
+.zip
+.vscode
