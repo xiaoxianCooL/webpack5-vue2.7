@@ -1,17 +1,15 @@
 /*
  *@author: thx
- *@description: webpack 公共部分
+ *@description: webpack 公共部分 若区分的逻辑太多,请区分开维护到对应的环境配置文件
  *@date: 2023-05-22 17:34:28
 */
-const os =require("os");
+const os = require("os");
 const path = require('path');
+const EslintWebpackPlugin = require("eslint-webpack-plugin");
 const { VueLoaderPlugin } = require("vue-loader");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const { ProgressPlugin } = require("webpack");
+const { DefinePlugin } = require("webpack");
 const threads = os.cpus().length;//获取cpu进程数量
-function resolve(dir) {
-    return path.join(__dirname, '..', dir)
-}
 
 module.exports = {
     context: path.resolve(__dirname, '../'),
@@ -24,38 +22,25 @@ module.exports = {
         }
     },
     resolve: {
-        extensions: ['.js', '.vue', '.json'],
+        // 自动补全文件扩展名
+        extensions: [".vue", ".js", ".json"],
         alias: {
-            'vue$': 'vue/dist/vue.esm.js',
-            '@': resolve('src'),
+            '@': path.resolve(__dirname, "../src"),
         }
-    },
-    optimization: {
-        // 此设置保证有新增的入口文件时,原有缓存的chunk文件仍然可用
-        moduleIds: "deterministic",
-        // 值为"single"会创建一个在所有生成chunk之间共享的运行时文件
-        runtimeChunk: "single",
-        splitChunks: {
-            // 设置为all, chunk可以在异步和非异步chunk之间共享。
-            chunks: 'all',
-            cacheGroups: {
-                vendor: {
-                    test: /[\\/]node_modules[\\/]/,
-                    name: "vendors",
-                    chunks: "all",
-                },
-            },
-        },
     },
     entry: './src/main.js',  //指定入口文件
     module: {
-        rules: [ //文件后缀名的匹配规则
+        rules: [
             {
                 test: /\.vue$/,
-                loader: "vue-loader"
+                loader: "vue-loader",
+                options: {
+                    // 开启缓存
+                    cacheDirectory: path.resolve(__dirname, "../node_modules/.cache/vue-loader"),
+                },
             },
             {
-                test: /\.m?js$/,
+                test: /\.js$/,
                 include: [path.resolve(__dirname, "../src")],//确定loader作用的文件
                 exclude: [
                     /node_modules\/core-js\//,
@@ -64,23 +49,38 @@ module.exports = {
                 use: [
                     {
                         loader: "thread-loader",//独立线程处理 仅非常耗时的loader使用 且前置
-                        options:{
-                            works:threads,//使用的进程数量
+                        options: {
+                            works: threads,//使用的进程数量
                         }
                     },
                     {
                         loader: "babel-loader",
                         options: {
                             cacheDirectory: true,//开启babel缓存 
-                            cacheCompression:false,//关闭缓存文件压缩
-                            plugins:["@babel/plugin-transform-runtime"],//由于babel-loader会为每个文件注入大量辅助代码并且定义多次 使用插件只去这里面找 只引用一次 减少代码体积
+                            cacheCompression: false,//关闭缓存文件压缩
+                            plugins: ["@babel/plugin-transform-runtime"],//由于babel-loader会为每个文件注入大量辅助代码并且定义多次 使用插件只去这里面找 只引用一次 减少代码体积
                         },
                     },
                 ],
             },
+            //减少请求 将小的图片或者小的字体通过base64的形式插入到js文件中，这样在请求js文件的时候，浏览器解析到需要展示图片就不需要额外去请求一次资源
+            {
+                test: /\.(jpe?g|png|gif|webp|svg)$/,
+                type: 'asset',
+                include: [path.resolve(__dirname, "../src")],
+                parser: {
+                    dataUrlCondition: {
+                        maxSize: 5 * 1024, // 10kb
+                    }
+                },
+                generator: {
+                    filename: "static/images/[hash:10][ext][query]",
+                },
+            },
+            // 处理其他资源
             {
                 test: /\.(ttf|woff|woff2?)$/i,
-                type: "asset/resource",//不需要转base64
+                type: "asset/resource",
                 generator: {
                     filename: "static/iconfont/[hash:10][ext][query]",
                 },
@@ -95,15 +95,18 @@ module.exports = {
         ]
     },
     plugins: [
+        new EslintWebpackPlugin({
+            context: path.resolve(__dirname, "../src"),
+            exclude: "node_modules",
+            cache: true,
+            cacheLocation: path.resolve(__dirname, "../node_modules/.cache/.eslintcache"),
+        }),
         new VueLoaderPlugin(),
-        new ProgressPlugin({
-            activeModules: true, // 默认false，显示活动模块计数和一个活动模块正在进行消息。
-            entries: true, // 默认true，显示正在进行的条目计数消息。
-            modules: false, // 默认true，显示正在进行的模块计数消息。
-            modulesCount: 5000, // 默认5000，开始时的最小模块数。PS:modules启用属性时生效。
-            profile: false, // 默认false，告诉ProgressPlugin为进度步骤收集配置文件数据。
-            dependencies: false, // 默认true，显示正在进行的依赖项计数消息。
-            dependenciesCount: 10000, // 默认10000，开始时的最小依赖项计数。PS:dependencies启用属性时生效。
+        // cross-env定义的环境变量给打包工具使用
+        // DefinePlugin定义环境变量给源代码使用
+        new DefinePlugin({
+            __VUE_OPTIONS_API__: true,
+            __VUE_PROD_DEVTOOLS__: false,
         }),
         new HtmlWebpackPlugin({
             filename: 'index.html',
@@ -112,5 +115,4 @@ module.exports = {
             cache: true, // 当文件没有发生任何改变时, 直接使用之前的缓存
         }),
     ],
-    mode: 'development',
 }

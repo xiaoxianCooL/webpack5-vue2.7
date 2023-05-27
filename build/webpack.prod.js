@@ -8,13 +8,13 @@ const os = require("os");
 const path = require('path');
 const { merge } = require('webpack-merge');
 const common = require('./webpack.common.js');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 const TerserPlugin = require("terser-webpack-plugin");
-const ESLintPlugin = require('eslint-webpack-plugin');
 const ImageMinimizerPlugin = require('image-minimizer-webpack-plugin');
+const CopyPlugin = require("copy-webpack-plugin");
 // 编译速度分析
 const SpeedMeasurePlugin = require("speed-measure-webpack-plugin");
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const smp = new SpeedMeasurePlugin();
 const devPlugingConfig = smp.wrap({})
 const threads = os.cpus().length;//获取cpu进程数量
@@ -24,67 +24,55 @@ const { PurgeCSSPlugin } = require('purgecss-webpack-plugin');
 const PATH = {
   src: path.resolve(__dirname, 'src')
 }
+/*
+ *@description:返回loader
+ *@date: 2023-05-27 10:06:14
+*/
+const getStyleLoaders = (pre) => {
+  return [
+    //压缩css代码 使用MiniCssExtractPlugin插件 提取到单独的css文件中 为每个包含 CSS 的 JS 文件创建一个 CSS 文件
+    MiniCssExtractPlugin.loader,
+    'css-loader',
+    {
+      loader: 'postcss-loader',
+      options: {
+        postcssOptions: {
+          plugins: ["postcss-preset-env"],//配合package beowserslist 解决大多数浏览器样式兼容问题
+        }
+      }
+    },
+    pre,
+  ].filter(Boolean);
+}
 
 module.exports = merge(common, {
   stats: "errors-warnings",//只在发生错误或有警告时输出
   output: {
-    path: path.resolve(__dirname, '../../vue-dist/fssc'),
-    filename: 'js/[name].js',
     publicPath: '/',
-    clean: true, // 每次构建都清除dist包
+    path: path.resolve(__dirname, '../../vue-dist/fssc'),
+    filename: "static/js/[name].[contenthash:10].js",
+    chunkFilename: "static/js/[name].[contenthash:10].chunk.js",
+    assetModuleFilename: "static/media/[hash:10][ext][query]",
+    clean: true,
   },
   module: {
     rules: [
       {
-        //每个文件与一个loader匹配 就停止继续检索 优化编译效率
+        //每个文件与一个loader匹配就立刻停止继续检索 优化编译效率
         oneOf: [
-          //压缩css代码 使用MiniCssExtractPlugin插件 提取到单独的css文件中 为每个包含 CSS 的 JS 文件创建一个 CSS 文件
           {
-            test: /\.(sa|sc|c)ss$/,
-            use: [
-              MiniCssExtractPlugin.loader,
-              "css-loader",
-              {
-                loader: 'postcss-loader',
-                options: {
-                  postcssOptions: {
-                    plugins: ["postcss-preset-env"],//解决大多数浏览器样式兼容问题
-                  }
-                }
-              },
-              "sass-loader"
-            ],
+            test: /\.css$/,
+            use: getStyleLoaders(),
           },
-          //减少请求 将小的图片或者小的字体通过base64的形式插入到js文件中，这样在请求js文件的时候，浏览器解析到需要展示图片就不需要额外去请求一次资源
           {
-            test: /\.(png|jpe?g|gif|svg|eot|otf)$/,
-            type: "asset",
-            include: [path.resolve(__dirname, "../src")],
-            parser: {
-              dataUrlCondition: {
-                maxSize: 5 * 1024, // 10kb
-              }
-            },
-            generator: {
-              filename: 'images/[name].[contenthash:6][ext]'
-            },
+            test: /\.s[ac]ss$/,
+            use: getStyleLoaders('sass-loader'),
           },
-        ]
-      }
+        ],
+      },
     ]
   },
   plugins: [
-    new ESLintPlugin({
-      context: path.resolve(__dirname, "src"),
-      exclude: "node_modules",
-      cache: true,//开启eslint编译缓存
-      cacheLocation: path.resolve(__dirname, '../node_modules/.cache/eslintcache'),
-      threads,
-    }),
-    new MiniCssExtractPlugin({
-      filename: "css/[name].[contenthash:6].css",
-      ignoreOrder: true
-    }),
     new PurgeCSSPlugin({//去除没用被引用的css代码
       paths: glob.sync(`${PATH.src}/**/*`, { nodir: true }),
       safelist: {
@@ -102,7 +90,58 @@ module.exports = merge(common, {
       whitelistPatternsChildren: [/^token/, /^pre/, /^code/, /^el-/]
     }),
   ],
+  plugins: [
+    new CopyPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, "../public"),
+          to: path.resolve(__dirname, "../../vue-dist/fssc"),
+          globOptions: {
+            // 忽略index.html文件
+            ignore: ["**/index.html"],
+          },
+        },
+        {
+          from: path.resolve(__dirname, '../static'),
+          to: path.resolve(__dirname, "../../vue-dist/fssc"),
+          globOptions: {
+            // 忽略index.html文件
+            ignore: ["**/index.html"],
+          },
+        }
+      ],
+    }),
+    new MiniCssExtractPlugin({
+      filename: "static/css/[name].[contenthash:10].css",
+      chunkFilename: "static/css/[name].[contenthash:10].chunk.css",
+    }),
+  ],
   optimization: {
+    splitChunks: {
+      chunks: "all",
+      cacheGroups: {
+        vue: {
+          test: /[\\/]node_modules[\\/]vue(.*)?[\\/]/,
+          name: "vue-chunk",
+          priority: 40,
+        },
+        elementui: {
+          name: "element-ui",
+          test: /element-ui/,
+          chunks: "all",
+          priority: 20,
+        },
+        libs: {
+          test: /[\\/]node_modules[\\/]/,
+          name: "libs-chunk",
+          priority: 10,
+        },
+      },
+    },
+    runtimeChunk: {
+      name: (entrypoint) => `runtime~${entrypoint.name}.js`,
+    },
+    minimize: true,//是否开启压缩配置
     //压缩的操作
     minimizer: [
       //css压缩
@@ -151,33 +190,8 @@ module.exports = merge(common, {
         }
       }),
     ],
-    splitChunks: {
-      chunks: "all",
-      minSize: 30 * 1024, // 30KB chunk文件的最小值
-      //maxSize: 2 * 1024 * 1024, //1M
-      minChunks: 2,//最小引入次数
-
-      maxAsyncRequests: 10, // 按需加载的最大并行请求数目
-      maxInitialRequests: 5, // 在入口点的并行请求的最大数目
-      name: "default",
-      cacheGroups: {  //根据设置的test匹配特定的依赖将该代码分割出去
-        default: false,
-        vendor: {
-          name: "vendor",
-          test: /node_modules/,
-          chunks: "all",
-          priority: 10,//优先级
-        },
-        elementui: {
-          name: "element-ui",
-          test: /element-ui/,
-          chunks: "all",
-          priority: 20,
-        }
-      }
-    },
   },
-  // devtool: 'source-map',//由于压缩后的代码只有一行 此处配置包含行列映射
+  devtool: 'source-map',//由于压缩后的代码只有一行 此处配置包含行列映射
   cache: {
     type: 'filesystem',
   },

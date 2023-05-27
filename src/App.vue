@@ -1,5 +1,5 @@
 <template>
-  <div class="app">
+  <div id="app">
     <router-view></router-view>
   </div>
 </template>
@@ -18,7 +18,6 @@ export default {
     
   },
   mounted: {
-    
   },
   watch: {
     
@@ -30,7 +29,8 @@ export default {
     
   },
   mounted () {
-    
+    console.log(this);
+    // this.$route.path('/fssc/pages2')
   },
 }
 </script>
