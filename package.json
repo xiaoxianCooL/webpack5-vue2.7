@@ -62,7 +62,7 @@
     "webpack-merge": "^5.9.0"
   },
   "dependencies": {
-    "element-ui": "^2.15.13",
+    "element-ui": "^2.13.0",
     "vue": "^2.7.10",
     "vue-router": "^3.6.5"
   }

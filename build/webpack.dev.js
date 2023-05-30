@@ -76,7 +76,7 @@ module.exports = merge(common, {
     open: true,
     // compress: true,
     hot: true,//开启HMR 启动后仅编译修改文件 极速加快构建速度
-    port: 8080,
+    port: 8087,
   },
   cache: {
     type: 'filesystem',

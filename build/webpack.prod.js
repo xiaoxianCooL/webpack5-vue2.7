@@ -18,12 +18,6 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const smp = new SpeedMeasurePlugin();
 const devPlugingConfig = smp.wrap({})
 const threads = os.cpus().length;//获取cpu进程数量
-
-const glob = require('glob');
-const { PurgeCSSPlugin } = require('purgecss-webpack-plugin');
-const PATH = {
-  src: path.resolve(__dirname, 'src')
-}
 /*
  *@description:返回loader
  *@date: 2023-05-27 10:06:14
@@ -48,7 +42,7 @@ const getStyleLoaders = (pre) => {
 module.exports = merge(common, {
   stats: "errors-warnings",//只在发生错误或有警告时输出
   output: {
-    publicPath: '/',
+    publicPath: './',
     path: path.resolve(__dirname, '../../vue-dist/fssc'),
     filename: "static/js/[name].[contenthash:10].js",
     chunkFilename: "static/js/[name].[contenthash:10].chunk.js",
@@ -73,24 +67,6 @@ module.exports = merge(common, {
     ]
   },
   plugins: [
-    new PurgeCSSPlugin({//去除没用被引用的css代码
-      paths: glob.sync(`${PATH.src}/**/*`, { nodir: true }),
-      safelist: {
-        standard: [/^el-/, "body", "html"], // 过滤以el-开头的类名，哪怕没用到也不删除
-      },
-      whitelist: ["html", "body"],
-      whitelistPatterns: [
-        /-(leave|enter|appear)(|-(to|from|active))$/,
-        /^(?!(|.*?:)cursor-move).+-move$/,
-        /^router-link(|-exact)-active$/,
-        /data-v-.*/,
-        /class/,
-        /^el-/
-      ],
-      whitelistPatternsChildren: [/^token/, /^pre/, /^code/, /^el-/]
-    }),
-  ],
-  plugins: [
     new CopyPlugin({
       patterns: [
         {
@@ -103,7 +79,7 @@ module.exports = merge(common, {
         },
         {
           from: path.resolve(__dirname, '../static'),
-          to: path.resolve(__dirname, "../../vue-dist/fssc"),
+          to: path.resolve(__dirname, "../../vue-dist/fssc/static"),
           globOptions: {
             // 忽略index.html文件
             ignore: ["**/index.html"],
@@ -114,6 +90,7 @@ module.exports = merge(common, {
     new MiniCssExtractPlugin({
       filename: "static/css/[name].[contenthash:10].css",
       chunkFilename: "static/css/[name].[contenthash:10].chunk.css",
+      ignoreOrder: true,//无视引入顺序
     }),
   ],
   optimization: {
